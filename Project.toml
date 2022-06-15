@@ -3,6 +3,10 @@ uuid = "dc1bc3fa-f2f9-4161-bcd2-cd86972ed172"
 authors = ["Paulo Jabardo <pjabardo@gmail.com>"]
 version = "0.1.0"
 
+[deps]
+AbstractDAQs = "be525c41-cbe2-4c7e-9446-a8e259030c72"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+
 [compat]
 julia = "1.7"
 
