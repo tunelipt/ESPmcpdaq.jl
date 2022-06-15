@@ -2,13 +2,14 @@ module ESPmcpdaq
 
 using PyCall
 using AbstractDAQs
-
+import Dates: DateTime, now
+import DataStructures: OrderedDict
 export DAQespmcp, daqconfigdev, daqstop, daqacquire
 export daqstart, daqread, samplesread, isreading
 
 
 
-mutable struct DAQespmcp
+mutable struct DAQespmcp <: AbstractDAQ
     devname::String
     Eref::Float64
     ip::String
@@ -17,7 +18,8 @@ mutable struct DAQespmcp
     conf::DAQConfig
     chans::Vector{Int}
     channames::Vector{String}
-    chanidx::Dict{String,Int}
+    chanidx::OrderedDict{String,Int}
+    time::DateTime
 end
 
 function DAQespmcp(devname, ip, port=9541, Eref=2.5)
@@ -26,15 +28,19 @@ function DAQespmcp(devname, ip, port=9541, Eref=2.5)
     conf = DAQConfig(devname=devname, ip=ip, model="ESPMCPdaq")
     chans = collect(1:32)
     channames = string.('E', numstring.(chans, 2))
-    chanidx = Dict{String,Int}()
+    chanidx = OrderedDict{String,Int}()
     for (i,ch) in enumerate(channames)
         chanidx[ch] = i
     end
 
-    DAQespmcp(devname, Eref, ip, port, server, conf, chans, channames, chanidx)
+    DAQespmcp(devname, Eref, ip, port, server, conf,
+              chans, channames, chanidx,
+              now())
 
     
 end
+
+AbstractDAQs.devtype(dev::DAQespmcp) = "DAQespmcp"
 
 function AbstractDAQs.daqconfigdev(dev::DAQespmcp; kw...)
 
@@ -69,25 +75,29 @@ function parse_xmlrpc_response(x, Eref)
     E = reshape(reinterpret(UInt16, read(IOBuffer(x[1].data),
                                          2*nsamples*nchans)) .* Eref/4095,
                 (nchans, nsamples))
-    return Array(E'), freq
+    return E, freq
 end
 
 
     
 
 function AbstractDAQs.daqacquire(dev::DAQespmcp)
+    dev.time = now()
     E,f =   parse_xmlrpc_response(dev.server["scanbin"](), dev.Eref)
-    return E,f
+    return MeasData{Matrix{Float64}}(devname(dev), devtype(dev),
+                                     dev.time, f, E, dev.chanidx)
 end
 
 function AbstractDAQs.daqstart(dev::DAQespmcp)
+    dev.time = now()
     dev.server["start"]()
     
 end
 
 function AbstractDAQs.daqread(dev::DAQespmcp)
     E,f =   parse_xmlrpc_response(dev.server["readbin"](), dev.Eref)
-    return E,f
+    return MeasData{Matrix{Float64}}(devname(dev), devtype(dev),
+                                     dev.time, f, E, dev.chanidx)
 end
 
 function AbstractDAQs.isreading(dev::DAQespmcp)
